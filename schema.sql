@@ -99,7 +99,52 @@ CREATE TABLE public.staff (
 );
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
 -- #endregion [staff]
+
+-- #region [project_staff_financial_fees]
+DROP TABLE IF EXISTS public.project_staff_financial_fees CASCADE;
+CREATE TABLE public.project_staff_financial_fees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_id UUID NOT NULL REFERENCES public.projects (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  staff_id UUID NOT NULL REFERENCES public.staff (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  amount BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT project_staff_financial_fees_project_id_staff_id_key UNIQUE (project_id, staff_id)
+);
+ALTER TABLE public.project_staff_financial_fees ENABLE ROW LEVEL SECURITY;
+-- #endregion [project_staff_financial_fees]
+
+-- #region [project_staff_financial_fees_fixed]
+DROP TABLE IF EXISTS public.project_staff_financial_fees_fixed CASCADE;
+CREATE TABLE public.project_staff_financial_fees_fixed (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_staff_financial_fees_id UUID NOT NULL REFERENCES public.project_staff_financial_fees (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  title TEXT NOT NULL,
+  amount BIGINT NOT NULL,
+  notes TEXT,
+  CONSTRAINT cash_amount_check CHECK (amount > 0),
+  CONSTRAINT project_staff_financial_fees_fixed_project_staff_financial_fees_id_title_key UNIQUE (project_staff_financial_fees_id, title)
+);
+ALTER TABLE public.project_staff_financial_fees_fixed ENABLE ROW LEVEL SECURITY;
+CREATE INDEX project_staff_financial_fees_fixed_project_staff_financial_fees_id_idx ON public.project_staff_financial_fees_fixed (project_staff_financial_fees_id);
+-- #endregion [project_staff_financial_fees_fixed]
+
+-- #region [project_staff_financial_fees_items]
+DROP TABLE IF EXISTS public.project_staff_financial_fees_items CASCADE;
+CREATE TABLE public.project_staff_financial_fees_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_staff_financial_fees_id UUID NOT NULL REFERENCES public.project_staff_financial_fees (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  title TEXT NOT NULL,
+  quantity NUMERIC NOT NULL CHECK (quantity > 0),
+  unit_price BIGINT NOT NULL CHECK (unit_price > 0),
+  notes TEXT,
+  CONSTRAINT project_staff_financial_fees_items_project_staff_financial_fees_id_title_key UNIQUE (project_staff_financial_fees_id, title),
+  CONSTRAINT project_staff_financial_fees_items_quantity_check CHECK (quantity > 0),
+  CONSTRAINT project_staff_financial_fees_items_unit_price_check CHECK (unit_price > 0)
+);
+ALTER TABLE public.project_staff_financial_fees_items ENABLE ROW LEVEL SECURITY;
+CREATE INDEX project_staff_financial_fees_items_project_staff_financial_fees_id_idx ON public.project_staff_financial_fees_items (project_staff_financial_fees_id);
 -- #endregion [Tables]
+
+-- #endregion [project_staff_financial_fees_items]
 -- ############################################################
 
 -- ############################################################
@@ -276,7 +321,6 @@ WITH
 -- DELETE Policy [admin]
 CREATE POLICY "partner_capital_transactions_policy_delete" ON public.partner_capital_transactions FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [partner_capital_transactions]
-
 -- #region [clients]
 DROP POLICY IF EXISTS "clients_policy_select" ON public.clients;
 DROP POLICY IF EXISTS "clients_policy_update" ON public.clients;
