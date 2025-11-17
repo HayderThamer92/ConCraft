@@ -60,15 +60,15 @@ DROP TABLE IF EXISTS public.partner_capital_transactions CASCADE;
 CREATE TABLE
     public.partner_capital_transactions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-        partner_id UUID NOT NULL REFERENCES PUBLIC.partners (id) ON DELETE CASCADE ON UPDATE CASCADE,
+        partner_id UUID NOT NULL REFERENCES public.partners (id) ON DELETE CASCADE ON UPDATE CASCADE,
         transaction_type transaction_type_enum NOT NULL,
         amount BIGINT NOT NULL,
         transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
         notes TEXT,
         CONSTRAINT cash_amount_check CHECK (amount > 0)
     );
-ALTER TABLE PUBLIC.partner_capital_transactions ENABLE ROW LEVEL SECURITY;
-CREATE INDEX partner_capital_transactions_partner_id_idx ON PUBLIC.partner_capital_transactions (partner_id);
+ALTER TABLE public.partner_capital_transactions ENABLE ROW LEVEL SECURITY;
+CREATE INDEX partner_capital_transactions_partner_id_idx ON public.partner_capital_transactions (partner_id);
 -- #endregion [partner_capital_transactions]
 -- #endregion [Tables]
 -- ############################################################
@@ -79,10 +79,7 @@ CREATE INDEX partner_capital_transactions_partner_id_idx ON PUBLIC.partner_capit
 CREATE OR REPLACE FUNCTION get_current_user_role()
 RETURNS TEXT
 SECURITY DEFINER
-SET
-    search_path = PUBLIC,
-    pg_catalog,
-    pg_temp
+SET search_path = public, pg_catalog, pg_temp
 AS $$
 DECLARE
     current_uid UUID := auth.uid();  -- store auth.uid() once
@@ -90,7 +87,7 @@ DECLARE
 BEGIN
     SELECT role
     INTO r
-    FROM PUBLIC.partners
+    FROM public.partners
     WHERE id = current_uid
     LIMIT 1;
 
@@ -101,6 +98,8 @@ $$ LANGUAGE plpgsql STABLE;
 -- #region [trigger_handler_partner_capital_transactions_full]
 CREATE OR REPLACE FUNCTION trigger_handler_partner_capital_transactions_full()
 RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
 LANGUAGE plpgsql
 AS $$
 DECLARE
