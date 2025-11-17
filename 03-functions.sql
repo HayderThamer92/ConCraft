@@ -25,7 +25,7 @@ $$ LANGUAGE plpgsql STABLE;
 -- ============================================================
 -- ============================================================
 -- #region [trigger_handler_cash_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_cash_partner_capital_transactions(p_amount NUMERIC, p_type TEXT)
+CREATE OR REPLACE FUNCTION trigger_handler_cash_partner_capital_transactions(p_amount BIGINT, p_type transaction_type_enum)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -41,7 +41,7 @@ $$;
 -- ============================================================
 -- ============================================================
 -- #region [trigger_handler_capital_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_capital_partner_capital_transactions(p_amount NUMERIC, p_type TEXT)
+CREATE OR REPLACE FUNCTION trigger_handler_capital_partner_capital_transactions(p_amount BIGINT, p_type transaction_type_enum)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -95,50 +95,6 @@ BEGIN
     RETURN NULL;
 END;
 $$;
-
--- #endregion [trigger_handler_partner_capital_transactions]
--- ============================================================
--- ============================================================
--- #region [trigger_handler_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_partner_capital_transactions()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    amount_diff NUMERIC;
-BEGIN
-    -- Handle INSERT operation
-    IF TG_OP = 'INSERT' THEN
-        PERFORM trigger_handler_cash_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-        PERFORM trigger_handler_capital_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-
-    -- Handle DELETE operation
-    ELSIF TG_OP = 'DELETE' THEN
-        PERFORM trigger_handler_cash_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-        PERFORM trigger_handler_capital_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-
-    -- Handle UPDATE operation
-    ELSIF TG_OP = 'UPDATE' THEN
-        amount_diff := NEW.amount - OLD.amount;
-
-        IF NEW.transaction_type = OLD.transaction_type THEN
-            PERFORM trigger_handler_cash_partner_capital_transactions(amount_diff, NEW.transaction_type);
-            PERFORM trigger_handler_capital_partner_capital_transactions(amount_diff, NEW.transaction_type);
-        ELSE
-            -- revert old transaction
-            PERFORM trigger_handler_cash_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-            PERFORM trigger_handler_capital_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-
-            -- apply new transaction
-            PERFORM trigger_handler_cash_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-            PERFORM trigger_handler_capital_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-        END IF;
-    END IF;
-
-    RETURN NULL;
-END;
-$$;
-
 -- #endregion [trigger_handler_partner_capital_transactions]
 -- ============================================================
 -- ============================================================
