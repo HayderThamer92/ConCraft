@@ -24,78 +24,98 @@ $$ LANGUAGE plpgsql STABLE;
 -- #endregion [get_current_user_role]
 -- ============================================================
 -- ============================================================
--- #region [trigger_handler_cash_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_cash_partner_capital_transactions(p_amount BIGINT, p_type transaction_type_enum)
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    IF p_type = 'deposit' THEN
-        UPDATE cash SET amount = amount + p_amount;
-    ELSIF p_type = 'withdrawal' THEN
-        UPDATE cash SET amount = amount - p_amount;
-    END IF;
-END;
-$$;
--- #endregion [trigger_handler_cash_partner_capital_transactions]
--- ============================================================
--- ============================================================
--- #region [trigger_handler_capital_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_capital_partner_capital_transactions(p_amount BIGINT, p_type transaction_type_enum)
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    IF p_type = 'deposit' THEN
-        UPDATE capital SET amount = amount + p_amount;
-    ELSIF p_type = 'withdrawal' THEN
-        UPDATE capital SET amount = amount - p_amount;
-    END IF;
-END;
-$$;
--- #endregion [trigger_handler_capital_partner_capital_transactions]
--- ============================================================
--- ============================================================
--- #region [trigger_handler_partner_capital_transactions]
-CREATE OR REPLACE FUNCTION trigger_handler_partner_capital_transactions()
+-- #region [trigger_handler_partner_capital_transactions_full]
+CREATE OR REPLACE FUNCTION trigger_handler_partner_capital_transactions_full()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
     amount_diff NUMERIC;
+    current_partner_capital NUMERIC;
 BEGIN
-    -- Handle INSERT operation
+    -- Get current capital of the partner
+    SELECT capital INTO current_partner_capital FROM partners WHERE id = COALESCE(NEW.partner_id, OLD.partner_id);
+
+    -- Prevent withdraw exceeding partner's capital
+    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+        IF (NEW.transaction_type = 'withdraw' AND NEW.amount > current_partner_capital) THEN
+            RAISE EXCEPTION 'withdraw amount exceeds partner''s available capital';
+        END IF;
+    END IF;
+
+    -- Handle INSERT
     IF TG_OP = 'INSERT' THEN
-        PERFORM trigger_handler_cash_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-        PERFORM trigger_handler_capital_partner_capital_transactions(NEW.amount, NEW.transaction_type);
+        -- Update partner capital
+        IF NEW.transaction_type = 'deposit' THEN
+            UPDATE partners SET capital = capital + NEW.amount WHERE id = NEW.partner_id;
+            UPDATE capital SET amount = amount + NEW.amount;
+            UPDATE cash SET amount = amount + NEW.amount;
+        ELSE
+            -- withdraw (checked above)
+            UPDATE partners SET capital = capital - NEW.amount WHERE id = NEW.partner_id;
+            UPDATE capital SET amount = amount - NEW.amount;
+            UPDATE cash SET amount = amount - NEW.amount;
+        END IF;
 
-    -- Handle DELETE operation
+    -- Handle DELETE
     ELSIF TG_OP = 'DELETE' THEN
-        PERFORM trigger_handler_cash_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-        PERFORM trigger_handler_capital_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
+        IF OLD.transaction_type = 'deposit' THEN
+            UPDATE partners SET capital = capital - OLD.amount WHERE id = OLD.partner_id;
+            UPDATE capital SET amount = amount - OLD.amount;
+            UPDATE cash SET amount = amount - OLD.amount;
+        ELSE
+            UPDATE partners SET capital = capital + OLD.amount WHERE id = OLD.partner_id;
+            UPDATE capital SET amount = amount + OLD.amount;
+            UPDATE cash SET amount = amount + OLD.amount;
+        END IF;
 
-    -- Handle UPDATE operation
+    -- Handle UPDATE
     ELSIF TG_OP = 'UPDATE' THEN
         amount_diff := NEW.amount - OLD.amount;
 
+        -- If transaction type didn't change
         IF NEW.transaction_type = OLD.transaction_type THEN
-            PERFORM trigger_handler_cash_partner_capital_transactions(amount_diff, NEW.transaction_type);
-            PERFORM trigger_handler_capital_partner_capital_transactions(amount_diff, NEW.transaction_type);
+            IF NEW.transaction_type = 'deposit' THEN
+                UPDATE partners SET capital = capital + amount_diff WHERE id = NEW.partner_id;
+                UPDATE capital SET amount = amount + amount_diff;
+                UPDATE cash SET amount = amount + amount_diff;
+            ELSE
+                -- withdraw
+                UPDATE partners SET capital = capital - amount_diff WHERE id = NEW.partner_id;
+                UPDATE capital SET amount = amount - amount_diff;
+                UPDATE cash SET amount = amount - amount_diff;
+            END IF;
         ELSE
-            -- revert old transaction
-            PERFORM trigger_handler_cash_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
-            PERFORM trigger_handler_capital_partner_capital_transactions(OLD.amount, CASE WHEN OLD.transaction_type='deposit' THEN 'withdrawal' ELSE 'deposit' END);
+            -- transaction type changed
+            -- revert old
+            IF OLD.transaction_type = 'deposit' THEN
+                UPDATE partners SET capital = capital - OLD.amount WHERE id = OLD.partner_id;
+                UPDATE capital SET amount = amount - OLD.amount;
+                UPDATE cash SET amount = amount - OLD.amount;
+            ELSE
+                UPDATE partners SET capital = capital + OLD.amount WHERE id = OLD.partner_id;
+                UPDATE capital SET amount = amount + OLD.amount;
+                UPDATE cash SET amount = amount + OLD.amount;
+            END IF;
 
-            -- apply new transaction
-            PERFORM trigger_handler_cash_partner_capital_transactions(NEW.amount, NEW.transaction_type);
-            PERFORM trigger_handler_capital_partner_capital_transactions(NEW.amount, NEW.transaction_type);
+            -- apply new
+            IF NEW.transaction_type = 'deposit' THEN
+                UPDATE partners SET capital = capital + NEW.amount WHERE id = NEW.partner_id;
+                UPDATE capital SET amount = amount + NEW.amount;
+                UPDATE cash SET amount = amount + NEW.amount;
+            ELSE
+                -- withdraw
+                UPDATE partners SET capital = capital - NEW.amount WHERE id = NEW.partner_id;
+                UPDATE capital SET amount = amount - NEW.amount;
+                UPDATE cash SET amount = amount - NEW.amount;
+            END IF;
         END IF;
     END IF;
 
     RETURN NULL;
 END;
 $$;
--- #endregion [trigger_handler_partner_capital_transactions]
+-- #endregion [trigger_handler_partner_capital_transactions_full]
 -- ============================================================
 -- ============================================================
 -- #region [placeholder]
