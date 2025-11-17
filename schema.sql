@@ -70,6 +70,35 @@ CREATE TABLE
 ALTER TABLE public.partner_capital_transactions ENABLE ROW LEVEL SECURITY;
 CREATE INDEX partner_capital_transactions_partner_id_idx ON public.partner_capital_transactions (partner_id);
 -- #endregion [partner_capital_transactions]
+-- #region [clients]
+DROP TABLE IF EXISTS public.clients CASCADE;
+CREATE TABLE public.clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  name TEXT NOT NULL,
+  CONSTRAINT clients_name_key UNIQUE (name)
+);
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+-- #endregion [clients]
+-- #region [projects]
+DROP TABLE IF EXISTS public.projects CASCADE;
+CREATE TABLE public.projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  client_id UUID REFERENCES public.clients (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  title TEXT NOT NULL,
+  CONSTRAINT projects_client_id_title_key UNIQUE (client_id, title)
+);
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+CREATE INDEX projects_client_id_idx ON public.projects (client_id);
+-- #endregion [projects]
+-- #region [staff]
+DROP TABLE IF EXISTS public.staff CASCADE;
+CREATE TABLE public.staff (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  name TEXT NOT NULL,
+  CONSTRAINT staff_name_key UNIQUE (name)
+);
+ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
+-- #endregion [staff]
 -- #endregion [Tables]
 -- ############################################################
 
@@ -192,61 +221,125 @@ $$;
 -- ############################################################
 -- #region [Policies]
 -- #region [cash]
-DROP POLICY IF EXISTS "cash_policy_select" ON cash;
+DROP POLICY IF EXISTS "cash_policy_select" ON public.cash;
 -- SELECT Policy [admin,user]
-CREATE POLICY "cash_policy_select" ON cash FOR
+CREATE POLICY "cash_policy_select" ON public.cash FOR
 SELECT
     USING (get_current_user_role () IN ('admin', 'user'));
 -- #endregion [cash]
 -- #region [capital]
-DROP POLICY IF EXISTS "capital_policy_select" ON capital;
+DROP POLICY IF EXISTS "capital_policy_select" ON public.capital;
 -- SELECT Policy [admin,user]
-CREATE POLICY "capital_policy_select" ON capital FOR
+CREATE POLICY "capital_policy_select" ON public.capital FOR
 SELECT
     USING (get_current_user_role () IN ('admin', 'user'));
 -- #endregion [capital]
 -- #region [partners]
-DROP POLICY IF EXISTS "partners_policy_select" ON partners;
-DROP POLICY IF EXISTS "partners_policy_update" ON partners;
-DROP POLICY IF EXISTS "partners_policy_insert" ON partners;
-DROP POLICY IF EXISTS "partners_policy_delete" ON partners;
+DROP POLICY IF EXISTS "partners_policy_select" ON public.partners;
+DROP POLICY IF EXISTS "partners_policy_update" ON public.partners;
+DROP POLICY IF EXISTS "partners_policy_insert" ON public.partners;
+DROP POLICY IF EXISTS "partners_policy_delete" ON public.partners;
 -- SELECT Policy [admin,user]
-CREATE POLICY "partners_policy_select" ON partners FOR
+CREATE POLICY "partners_policy_select" ON public.partners FOR
 SELECT
     USING (get_current_user_role () IN ('admin', 'user'));
 -- UPDATE Policy [admin]
-CREATE POLICY "partners_policy_update" ON partners FOR
+CREATE POLICY "partners_policy_update" ON public.partners FOR
 UPDATE USING (get_current_user_role () = 'admin')
 WITH
     CHECK (get_current_user_role () = 'admin');
 -- INSERT Policy [admin]
-CREATE POLICY "partners_policy_insert" ON partners FOR INSERT
+CREATE POLICY "partners_policy_insert" ON public.partners FOR INSERT
 WITH
     CHECK (get_current_user_role () = 'admin');
 -- DELETE Policy [admin]
-CREATE POLICY "partners_policy_delete" ON partners FOR DELETE USING (get_current_user_role () = 'admin');
+CREATE POLICY "partners_policy_delete" ON public.partners FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [partners]
 -- #region [partner_capital_transactions]
-DROP POLICY IF EXISTS "partner_capital_transactions_policy_select" ON partner_capital_transactions;
-DROP POLICY IF EXISTS "partner_capital_transactions_policy_update" ON partner_capital_transactions;
-DROP POLICY IF EXISTS "partner_capital_transactions_policy_insert" ON partner_capital_transactions;
-DROP POLICY IF EXISTS "partner_capital_transactions_policy_delete" ON partner_capital_transactions;
+DROP POLICY IF EXISTS "partner_capital_transactions_policy_select" ON public.partner_capital_transactions;
+DROP POLICY IF EXISTS "partner_capital_transactions_policy_update" ON public.partner_capital_transactions;
+DROP POLICY IF EXISTS "partner_capital_transactions_policy_insert" ON public.partner_capital_transactions;
+DROP POLICY IF EXISTS "partner_capital_transactions_policy_delete" ON public.partner_capital_transactions;
 -- SELECT Policy [admin,user]
-CREATE POLICY "partner_capital_transactions_policy_select" ON partner_capital_transactions FOR
+CREATE POLICY "partner_capital_transactions_policy_select" ON public.partner_capital_transactions FOR
 SELECT
     USING (get_current_user_role () IN ('admin', 'user'));
 -- UPDATE Policy [admin]
-CREATE POLICY "partner_capital_transactions_policy_update" ON partner_capital_transactions FOR
+CREATE POLICY "partner_capital_transactions_policy_update" ON public.partner_capital_transactions FOR
 UPDATE USING (get_current_user_role () = 'admin')
 WITH
     CHECK (get_current_user_role () = 'admin');
 -- INSERT Policy [admin]
-CREATE POLICY "partner_capital_transactions_policy_insert" ON partner_capital_transactions FOR INSERT
+CREATE POLICY "partner_capital_transactions_policy_insert" ON public.partner_capital_transactions FOR INSERT
 WITH
     CHECK (get_current_user_role () = 'admin');
 -- DELETE Policy [admin]
-CREATE POLICY "partner_capital_transactions_policy_delete" ON partner_capital_transactions FOR DELETE USING (get_current_user_role () = 'admin');
+CREATE POLICY "partner_capital_transactions_policy_delete" ON public.partner_capital_transactions FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [partner_capital_transactions]
+
+-- #region [clients]
+DROP POLICY IF EXISTS "clients_policy_select" ON public.clients;
+DROP POLICY IF EXISTS "clients_policy_update" ON public.clients;
+DROP POLICY IF EXISTS "clients_policy_insert" ON public.clients;
+DROP POLICY IF EXISTS "clients_policy_delete" ON public.clients;
+-- SELECT Policy [admin,user]
+CREATE POLICY "clients_policy_select" ON public.clients FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "clients_policy_update" ON public.clients FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "clients_policy_insert" ON public.clients FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "clients_policy_delete" ON public.clients FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [clients]
+-- #region [projects]
+DROP POLICY IF EXISTS "projects_policy_select" ON public.projects;
+DROP POLICY IF EXISTS "projects_policy_update" ON public.projects;
+DROP POLICY IF EXISTS "projects_policy_insert" ON public.projects;
+DROP POLICY IF EXISTS "projects_policy_delete" ON public.projects;
+-- SELECT Policy [admin,user]
+CREATE POLICY "projects_policy_select" ON public.projects FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "projects_policy_update" ON public.projects FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "projects_policy_insert" ON public.projects FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "projects_policy_delete" ON public.projects FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [projects]
+-- #region [staff]
+DROP POLICY IF EXISTS "staff_policy_select" ON public.staff;
+DROP POLICY IF EXISTS "staff_policy_update" ON public.staff;
+DROP POLICY IF EXISTS "staff_policy_insert" ON public.staff;
+DROP POLICY IF EXISTS "staff_policy_delete" ON public.staff;
+-- SELECT Policy [admin,user]
+CREATE POLICY "staff_policy_select" ON public.staff FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "staff_policy_update" ON public.staff FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "staff_policy_insert" ON public.staff FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "staff_policy_delete" ON public.staff FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [staff]
 -- #endregion [Policies]
 -- ############################################################
 
