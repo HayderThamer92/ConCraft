@@ -96,35 +96,35 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 -- #endregion [get_current_user_role]
 -- #region [trigger_handler_partner_capital_transactions_full]
-CREATE OR REPLACE FUNCTION trigger_handler_partner_capital_transactions_full()
+CREATE OR REPLACE FUNCTION public.trigger_handler_partner_capital_transactions_full()
 RETURNS TRIGGER
 SECURITY DEFINER
 SET search_path = public, pg_catalog, pg_temp
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    amount_diff NUMERIC;
-    current_partner_capital NUMERIC;
+    amount_diff BIGINT;
+    current_partner_capital BIGINT;
 BEGIN
     -- Get current capital of the partner
-    SELECT capital INTO current_partner_capital FROM partners WHERE id = COALESCE(NEW.partner_id, OLD.partner_id);
+    SELECT capital::BIGINT INTO current_partner_capital
+      FROM partners
+      WHERE id = COALESCE(NEW.partner_id, OLD.partner_id);
 
-    -- Prevent withdraw exceeding partner's capital
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        IF (NEW.transaction_type = 'withdraw' AND NEW.amount > current_partner_capital) THEN
-            RAISE EXCEPTION 'withdraw amount exceeds partner''s available capital';
+    -- Prevent withdraw exceeding partner's capital BEFORE operation
+    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+        IF NEW.transaction_type = 'withdraw' AND NEW.amount > current_partner_capital THEN
+            RAISE EXCEPTION 'Withdraw amount exceeds partner''s available capital';
         END IF;
     END IF;
 
     -- Handle INSERT
     IF TG_OP = 'INSERT' THEN
-        -- Update partner capital
         IF NEW.transaction_type = 'deposit' THEN
             UPDATE partners SET capital = capital + NEW.amount WHERE id = NEW.partner_id;
             UPDATE capital SET amount = amount + NEW.amount;
             UPDATE cash SET amount = amount + NEW.amount;
         ELSE
-            -- withdraw (checked above)
             UPDATE partners SET capital = capital - NEW.amount WHERE id = NEW.partner_id;
             UPDATE capital SET amount = amount - NEW.amount;
             UPDATE cash SET amount = amount - NEW.amount;
@@ -146,21 +146,19 @@ BEGIN
     ELSIF TG_OP = 'UPDATE' THEN
         amount_diff := NEW.amount - OLD.amount;
 
-        -- If transaction type didn't change
         IF NEW.transaction_type = OLD.transaction_type THEN
+            -- Same type (deposit/deposit or withdraw/withdraw)
             IF NEW.transaction_type = 'deposit' THEN
                 UPDATE partners SET capital = capital + amount_diff WHERE id = NEW.partner_id;
                 UPDATE capital SET amount = amount + amount_diff;
                 UPDATE cash SET amount = amount + amount_diff;
             ELSE
-                -- withdraw
                 UPDATE partners SET capital = capital - amount_diff WHERE id = NEW.partner_id;
                 UPDATE capital SET amount = amount - amount_diff;
                 UPDATE cash SET amount = amount - amount_diff;
             END IF;
         ELSE
-            -- transaction type changed
-            -- revert old
+            -- Type changed: revert old transaction, then apply new
             IF OLD.transaction_type = 'deposit' THEN
                 UPDATE partners SET capital = capital - OLD.amount WHERE id = OLD.partner_id;
                 UPDATE capital SET amount = amount - OLD.amount;
@@ -171,13 +169,12 @@ BEGIN
                 UPDATE cash SET amount = amount + OLD.amount;
             END IF;
 
-            -- apply new
+            -- Apply new transaction
             IF NEW.transaction_type = 'deposit' THEN
                 UPDATE partners SET capital = capital + NEW.amount WHERE id = NEW.partner_id;
                 UPDATE capital SET amount = amount + NEW.amount;
                 UPDATE cash SET amount = amount + NEW.amount;
             ELSE
-                -- withdraw
                 UPDATE partners SET capital = capital - NEW.amount WHERE id = NEW.partner_id;
                 UPDATE capital SET amount = amount - NEW.amount;
                 UPDATE cash SET amount = amount - NEW.amount;
@@ -256,10 +253,14 @@ CREATE POLICY "partner_capital_transactions_policy_delete" ON partner_capital_tr
 -- ############################################################
 -- #region [Triggers]
 -- #region [trigger_partner_capital_transactions_full]
+DROP TRIGGER IF EXISTS trigger_partner_capital_transactions_full
+ON partner_capital_transactions;
+
 CREATE TRIGGER trigger_partner_capital_transactions_full
-AFTER INSERT OR UPDATE OR DELETE ON partner_capital_transactions
+BEFORE INSERT OR UPDATE OR DELETE
+ON partner_capital_transactions
 FOR EACH ROW
-EXECUTE FUNCTION trigger_handler_partner_capital_transactions_full();
+EXECUTE FUNCTION public.trigger_handler_partner_capital_transactions_full();
 -- #endregion [trigger_partner_capital_transactions_full]
 -- #endregion [Triggers]
 -- ############################################################
