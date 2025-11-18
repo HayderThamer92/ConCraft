@@ -762,6 +762,7 @@ VALUES (
 );
 -- #endregion [project_staff_financial_fees]
 -- #region [project_staff_financial_fees_items]
+-- Use sql editor to insert because uuid is not known and without truncate
 -- TRUNCATE TABLE public.project_staff_financial_fees_items RESTART IDENTITY CASCADE;
 -- INSERT INTO public.project_staff_financial_fees_items
 --     (project_staff_financial_fees_id, title, quantity, unit_price, notes)
@@ -769,5 +770,18 @@ VALUES (
 --     ('UUID', 'لبخ اسمنت', 750, 6000, 'تم حساب الكمية من قبل احمد ثامر واحمد اسماعيل');
 
 -- #endregion [project_staff_financial_fees_items]
+-- #region [project_client_financial_fees]
+TRUNCATE TABLE public.project_client_financial_fees RESTART IDENTITY CASCADE;
+INSERT INTO public.project_client_financial_fees (project_id)
+VALUES ((SELECT id FROM public.projects WHERE title = 'البحر - المرحلة الثانية' LIMIT 1));
+-- #endregion [project_staff_financial_fees]
+-- #region [project_client_financial_fees_items]
+-- Use sql editor to insert because uuid is not known and without truncate
+-- TRUNCATE TABLE public.project_client_financial_fees_items RESTART IDENTITY CASCADE;
+-- INSERT INTO public.project_client_financial_fees_items
+--     (project_client_financial_fees_id, title, quantity, unit_price, notes)
+-- VALUES
+--     ('UUID', 'لبخ اسمنت', 750, 7500, 'تم حساب الكمية من قبل احمد ثامر واحمد اسماعيل');
+-- #endregion [project_client_financial_fees_items]
 -- #endregion [Data]
 -- ############################################################
