@@ -139,8 +139,8 @@ CREATE TABLE public.project_staff_financial_fees_items (
 );
 ALTER TABLE public.project_staff_financial_fees_items ENABLE ROW LEVEL SECURITY;
 CREATE INDEX psffi_project_staff_financial_fees_id_idx ON public.project_staff_financial_fees_items (project_staff_financial_fees_id);
--- #endregion [Tables]
 -- #endregion [project_staff_financial_fees_items]
+-- #endregion [Tables]
 -- ############################################################
 
 -- ############################################################
@@ -256,6 +256,82 @@ BEGIN
 END;
 $$;
 -- #endregion [trigger_handler_partner_capital_transactions_full]
+-- #region [trigger_handler_project_staff_financial_fees_fixed_full]
+CREATE OR REPLACE FUNCTION trigger_handler_project_staff_financial_fees_fixed_full()
+RETURNS TRIGGER
+SET
+    search_path = public,
+    pg_catalog,
+    pg_temp
+AS $function$
+DECLARE
+    v_fees_id UUID;
+BEGIN
+    -- Determine parent id
+    IF (TG_OP = 'DELETE') THEN
+        v_fees_id := OLD.project_staff_financial_fees_id;
+    ELSE
+        v_fees_id := NEW.project_staff_financial_fees_id;
+    END IF;
+
+    -- Update main table total
+    UPDATE public.project_staff_financial_fees AS p
+    SET amount = (
+        COALESCE((
+            SELECT SUM(amount)
+            FROM public.project_staff_financial_fees_fixed
+            WHERE project_staff_financial_fees_id = v_fees_id
+        ), 0) +
+        COALESCE((
+            SELECT SUM(amount)
+            FROM public.project_staff_financial_fees_items
+            WHERE project_staff_financial_fees_id = v_fees_id
+        ), 0)
+    )
+    WHERE p.id = v_fees_id;
+
+    RETURN NULL;
+END;
+$function$ LANGUAGE plpgsql;
+-- #endregion [trigger_handler_project_staff_financial_fees_fixed_full]
+-- #region [trigger_handler_project_staff_financial_fees_items_full]
+CREATE OR REPLACE FUNCTION trigger_handler_project_staff_financial_fees_items_full()
+RETURNS TRIGGER
+SET
+    search_path = public,
+    pg_catalog,
+    pg_temp
+AS $function$
+DECLARE
+    v_fees_id UUID;
+BEGIN
+    -- Determine parent id
+    IF (TG_OP = 'DELETE') THEN
+        v_fees_id := OLD.project_staff_financial_fees_id;
+    ELSE
+        v_fees_id := NEW.project_staff_financial_fees_id;
+    END IF;
+
+    -- Update main total
+    UPDATE public.project_staff_financial_fees AS p
+    SET amount = (
+        COALESCE((
+            SELECT SUM(amount)
+            FROM public.project_staff_financial_fees_fixed
+            WHERE project_staff_financial_fees_id = v_fees_id
+        ), 0) +
+        COALESCE((
+            SELECT SUM(amount)
+            FROM public.project_staff_financial_fees_items
+            WHERE project_staff_financial_fees_id = v_fees_id
+        ), 0)
+    )
+    WHERE p.id = v_fees_id;
+
+    RETURN NULL;
+END;
+$function$ LANGUAGE plpgsql;
+-- #endregion [trigger_handler_project_staff_financial_fees_items_full]
 -- #endregion [Functions]
 -- ############################################################
 
@@ -380,6 +456,69 @@ WITH
 -- DELETE Policy [admin]
 CREATE POLICY "staff_policy_delete" ON public.staff FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [staff]
+-- #region [project_staff_financial_fees]
+DROP POLICY IF EXISTS "project_staff_financial_fees_policy_select" ON public.project_staff_financial_fees;
+DROP POLICY IF EXISTS "project_staff_financial_fees_policy_update" ON public.project_staff_financial_fees;
+DROP POLICY IF EXISTS "project_staff_financial_fees_policy_insert" ON public.project_staff_financial_fees;
+DROP POLICY IF EXISTS "project_staff_financial_fees_policy_delete" ON public.project_staff_financial_fees;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_staff_financial_fees_policy_select" ON public.project_staff_financial_fees FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_policy_update" ON public.project_staff_financial_fees FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_staff_financial_fees_policy_insert" ON public.project_staff_financial_fees FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_policy_delete" ON public.project_staff_financial_fees FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_staff_financial_fees]
+-- #region [project_staff_financial_fees_fixed]
+DROP POLICY IF EXISTS "project_staff_financial_fees_fixed_policy_select" ON public.project_staff_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_staff_financial_fees_fixed_policy_update" ON public.project_staff_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_staff_financial_fees_fixed_policy_insert" ON public.project_staff_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_staff_financial_fees_fixed_policy_delete" ON public.project_staff_financial_fees_fixed;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_staff_financial_fees_fixed_policy_select" ON public.project_staff_financial_fees_fixed FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_fixed_policy_update" ON public.project_staff_financial_fees_fixed FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_staff_financial_fees_fixed_policy_insert" ON public.project_staff_financial_fees_fixed FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_fixed_policy_delete" ON public.project_staff_financial_fees_fixed FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_staff_financial_fees_fixed]
+-- #region [project_staff_financial_fees_items]
+DROP POLICY IF EXISTS "project_staff_financial_fees_items_policy_select" ON public.project_staff_financial_fees_items;
+DROP POLICY IF EXISTS "project_staff_financial_fees_items_policy_update" ON public.project_staff_financial_fees_items;
+DROP POLICY IF EXISTS "project_staff_financial_fees_items_policy_insert" ON public.project_staff_financial_fees_items;
+DROP POLICY IF EXISTS "project_staff_financial_fees_items_policy_delete" ON public.project_staff_financial_fees_items;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_staff_financial_fees_items_policy_select" ON public.project_staff_financial_fees_items FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_items_policy_update" ON public.project_staff_financial_fees_items FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_staff_financial_fees_items_policy_insert" ON public.project_staff_financial_fees_items FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_staff_financial_fees_items_policy_delete" ON public.project_staff_financial_fees_items FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_staff_financial_fees_items]
 -- #endregion [Policies]
 -- ############################################################
 
@@ -395,6 +534,26 @@ ON partner_capital_transactions
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_handler_partner_capital_transactions_full();
 -- #endregion [trigger_partner_capital_transactions_full]
+-- #region [trigger_project_staff_financial_fees_fixed_full]
+DROP TRIGGER IF EXISTS trigger_project_staff_financial_fees_fixed_full
+ON public.project_staff_financial_fees_fixed;
+
+CREATE TRIGGER trigger_project_staff_financial_fees_fixed_full
+AFTER INSERT OR UPDATE OR DELETE
+ON public.project_staff_financial_fees_fixed
+FOR EACH ROW
+EXECUTE FUNCTION trigger_handler_project_staff_financial_fees_fixed_full();
+-- #endregion [trigger_project_staff_financial_fees_fixed_full]
+-- #region [trigger_project_staff_financial_fees_items_full]
+DROP TRIGGER IF EXISTS trigger_project_staff_financial_fees_items_full
+ON public.project_staff_financial_fees_items;
+
+CREATE TRIGGER trigger_project_staff_financial_fees_items_full
+AFTER INSERT OR UPDATE OR DELETE
+ON public.project_staff_financial_fees_items
+FOR EACH ROW
+EXECUTE FUNCTION trigger_handler_project_staff_financial_fees_items_full();
+-- #endregion [trigger_project_staff_financial_fees_items_full]
 -- #endregion [Triggers]
 -- ############################################################
 
