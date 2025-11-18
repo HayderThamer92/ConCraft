@@ -256,82 +256,39 @@ BEGIN
 END;
 $$;
 -- #endregion [trigger_handler_partner_capital_transactions_full]
--- #region [trigger_handler_project_staff_financial_fees_fixed_full]
-CREATE OR REPLACE FUNCTION trigger_handler_project_staff_financial_fees_fixed_full()
+-- #region [trigger_handler_project_staff_financial_fees_full]
+CREATE OR REPLACE FUNCTION public.trigger_handler_project_staff_financial_fees_full()
 RETURNS TRIGGER
-SET
-    search_path = public,
-    pg_catalog,
-    pg_temp
-AS $function$
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+LANGUAGE plpgsql
+AS $$
 DECLARE
-    v_fees_id UUID;
+    v_fees_id UUID := COALESCE(NEW.project_staff_financial_fees_id, OLD.project_staff_financial_fees_id);
+    v_sum_fixed BIGINT;
+    v_sum_items BIGINT;
 BEGIN
-    -- Determine parent id
-    IF (TG_OP = 'DELETE') THEN
-        v_fees_id := OLD.project_staff_financial_fees_id;
-    ELSE
-        v_fees_id := NEW.project_staff_financial_fees_id;
-    END IF;
+    -- Sum from fixed fees
+    SELECT COALESCE(SUM(amount),0)
+    INTO v_sum_fixed
+    FROM public.project_staff_financial_fees_fixed
+    WHERE project_staff_financial_fees_id = v_fees_id;
 
-    -- Update main table total
-    UPDATE public.project_staff_financial_fees AS p
-    SET amount = (
-        COALESCE((
-            SELECT SUM(amount)
-            FROM public.project_staff_financial_fees_fixed
-            WHERE project_staff_financial_fees_id = v_fees_id
-        ), 0) +
-        COALESCE((
-            SELECT SUM(amount)
-            FROM public.project_staff_financial_fees_items
-            WHERE project_staff_financial_fees_id = v_fees_id
-        ), 0)
-    )
-    WHERE p.id = v_fees_id;
+    -- Sum from items
+    SELECT COALESCE(SUM(quantity * unit_price),0)
+    INTO v_sum_items
+    FROM public.project_staff_financial_fees_items
+    WHERE project_staff_financial_fees_id = v_fees_id;
+
+    -- Update main table
+    UPDATE public.project_staff_financial_fees
+    SET amount = v_sum_fixed + v_sum_items
+    WHERE id = v_fees_id;
 
     RETURN NULL;
 END;
-$function$ LANGUAGE plpgsql;
--- #endregion [trigger_handler_project_staff_financial_fees_fixed_full]
--- #region [trigger_handler_project_staff_financial_fees_items_full]
-CREATE OR REPLACE FUNCTION trigger_handler_project_staff_financial_fees_items_full()
-RETURNS TRIGGER
-SET
-    search_path = public,
-    pg_catalog,
-    pg_temp
-AS $function$
-DECLARE
-    v_fees_id UUID;
-BEGIN
-    -- Determine parent id
-    IF (TG_OP = 'DELETE') THEN
-        v_fees_id := OLD.project_staff_financial_fees_id;
-    ELSE
-        v_fees_id := NEW.project_staff_financial_fees_id;
-    END IF;
-
-    -- Update main total
-    UPDATE public.project_staff_financial_fees AS p
-    SET amount = (
-        COALESCE((
-            SELECT SUM(amount)
-            FROM public.project_staff_financial_fees_fixed
-            WHERE project_staff_financial_fees_id = v_fees_id
-        ), 0) +
-        COALESCE((
-            SELECT SUM(amount)
-            FROM public.project_staff_financial_fees_items
-            WHERE project_staff_financial_fees_id = v_fees_id
-        ), 0)
-    )
-    WHERE p.id = v_fees_id;
-
-    RETURN NULL;
-END;
-$function$ LANGUAGE plpgsql;
--- #endregion [trigger_handler_project_staff_financial_fees_items_full]
+$$;
+-- #endregion [trigger_handler_project_staff_financial_fees_full]
 -- #endregion [Functions]
 -- ############################################################
 
@@ -542,7 +499,7 @@ CREATE TRIGGER trigger_project_staff_financial_fees_fixed_full
 AFTER INSERT OR UPDATE OR DELETE
 ON public.project_staff_financial_fees_fixed
 FOR EACH ROW
-EXECUTE FUNCTION trigger_handler_project_staff_financial_fees_fixed_full();
+EXECUTE FUNCTION public.trigger_handler_project_staff_financial_fees_full();
 -- #endregion [trigger_project_staff_financial_fees_fixed_full]
 -- #region [trigger_project_staff_financial_fees_items_full]
 DROP TRIGGER IF EXISTS trigger_project_staff_financial_fees_items_full
@@ -552,7 +509,7 @@ CREATE TRIGGER trigger_project_staff_financial_fees_items_full
 AFTER INSERT OR UPDATE OR DELETE
 ON public.project_staff_financial_fees_items
 FOR EACH ROW
-EXECUTE FUNCTION trigger_handler_project_staff_financial_fees_items_full();
+EXECUTE FUNCTION public.trigger_handler_project_staff_financial_fees_full();
 -- #endregion [trigger_project_staff_financial_fees_items_full]
 -- #endregion [Triggers]
 -- ############################################################
@@ -608,6 +565,53 @@ VALUES
     ('محمد عزيز'),
     ('مهندس مسلم');
 -- #endregion [clients]
+-- #region [projects]
+TRUNCATE TABLE public.projects RESTART IDENTITY CASCADE;
+INSERT INTO public.projects (client_id, title)
+VALUES
+    ((SELECT id FROM public.clients WHERE name = 'ابو حوراء'),'البحر - المرحلة الثانية'),
+    ((SELECT id FROM public.clients WHERE name = 'الشكرجي'),'منزله - شارع المطار'),
+    ((SELECT id FROM public.clients WHERE name = 'ابو نصير'),'المحكمة'),
+    ((SELECT id FROM public.clients WHERE name = 'مالك ابو كرار'),'منزله - المكرمة'),
+    ((SELECT id FROM public.clients WHERE name = 'شركة قصور المستقبل'),'جامعة الكوفة - دور الاساتذة'),
+    ((SELECT id FROM public.clients WHERE name = 'فقار التميمي'),'جامعة الكوفة - كلية القانون'),
+    ((SELECT id FROM public.clients WHERE name = 'مهندس امجد'),'فندق ريبال - الروان'),
+    ((SELECT id FROM public.clients WHERE name = 'شركة الغدير للاستثمارات العقارية'),'مجمع البدور'),
+    ((SELECT id FROM public.clients WHERE name = 'محمد عزيز'),'منزله - مجمع المختار'),
+    ((SELECT id FROM public.clients WHERE name = 'مهندس مسلم'),'بناية الغدير');
+-- #endregion [projects]
+-- #region [staff]
+TRUNCATE TABLE public.staff RESTART IDENTITY CASCADE;
+INSERT INTO public.staff (name)
+VALUES
+    ('عباس التميمي'),
+    ('سعد جريو'),
+    ('ابو كوثر'),
+    ('فقار التميمي'),
+    ('علي طماطه'),
+    ('كرار واجهات'),
+    ('ابو ادريس'),
+    ('ابو علي ايران'),
+    ('احمد وفلاح'),
+    ('تحسين'),
+    ('زيد'),
+    ('ابو دموع');
+-- #endregion [staff]
+-- #region [project_staff_financial_fees]
+TRUNCATE TABLE public.project_staff_financial_fees RESTART IDENTITY CASCADE;
+INSERT INTO public.project_staff_financial_fees (project_id, staff_id)
+VALUES (
+  (SELECT id FROM public.projects WHERE title = 'البحر - المرحلة الثانية' LIMIT 1),
+  (SELECT id FROM public.staff WHERE name = 'عباس التميمي' LIMIT 1)
+);
+-- #endregion [project_staff_financial_fees]
+-- #region [project_staff_financial_fees_items]
+-- TRUNCATE TABLE public.project_staff_financial_fees_items RESTART IDENTITY CASCADE;
+-- INSERT INTO public.project_staff_financial_fees_items
+--     (project_staff_financial_fees_id, title, quantity, unit_price, notes)
+-- VALUES
+--     ('UUID', 'لبخ اسمنت', 750, 6000, 'تم حساب الكمية من قبل احمد ثامر واحمد اسماعيل');
 
+-- #endregion [project_staff_financial_fees_items]
 -- #endregion [Data]
 -- ############################################################
