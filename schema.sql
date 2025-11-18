@@ -140,6 +140,46 @@ CREATE TABLE public.project_staff_financial_fees_items (
 ALTER TABLE public.project_staff_financial_fees_items ENABLE ROW LEVEL SECURITY;
 CREATE INDEX psffi_project_staff_financial_fees_id_idx ON public.project_staff_financial_fees_items (project_staff_financial_fees_id);
 -- #endregion [project_staff_financial_fees_items]
+-- #region [project_client_financial_fees]
+DROP TABLE IF EXISTS public.project_client_financial_fees CASCADE;
+CREATE TABLE public.project_client_financial_fees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_id UUID NOT NULL REFERENCES public.projects (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  amount BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT project_client_financial_fees_project_id_key UNIQUE (project_id)
+);
+ALTER TABLE public.project_client_financial_fees ENABLE ROW LEVEL SECURITY;
+-- #endregion [project_client_financial_fees]
+-- #region [project_client_financial_fees_fixed]
+DROP TABLE IF EXISTS public.project_client_financial_fees_fixed CASCADE;
+CREATE TABLE public.project_client_financial_fees_fixed (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_client_financial_fees_id UUID NOT NULL REFERENCES public.project_client_financial_fees (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  title TEXT NOT NULL,
+  amount BIGINT NOT NULL,
+  notes TEXT,
+  CONSTRAINT pcfff_amount_check CHECK (amount > 0),
+  CONSTRAINT pcfff_project_client_financial_fees_id_title_key UNIQUE (project_client_financial_fees_id, title)
+);
+ALTER TABLE public.project_client_financial_fees_fixed ENABLE ROW LEVEL SECURITY;
+CREATE INDEX pcfff_project_client_financial_fees_id_idx ON public.project_client_financial_fees_fixed (project_client_financial_fees_id);
+-- #endregion [project_client_financial_fees_fixed]
+-- #region [project_client_financial_fees_items]
+DROP TABLE IF EXISTS public.project_client_financial_fees_items CASCADE;
+CREATE TABLE public.project_client_financial_fees_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_client_financial_fees_id UUID NOT NULL REFERENCES public.project_client_financial_fees (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  title TEXT NOT NULL,
+  quantity NUMERIC NOT NULL,
+  unit_price BIGINT NOT NULL,
+  notes TEXT,
+  CONSTRAINT pcffi_project_client_financial_fees_id_title_key UNIQUE (project_client_financial_fees_id, title),
+  CONSTRAINT pcffi_quantity_check CHECK (quantity > 0),
+  CONSTRAINT pcffi_unit_price_check CHECK (unit_price > 0)
+);
+ALTER TABLE public.project_client_financial_fees_items ENABLE ROW LEVEL SECURITY;
+CREATE INDEX pcffi_project_client_financial_fees_id_idx ON public.project_client_financial_fees_items (project_client_financial_fees_id);
+-- #endregion [project_client_financial_fees_items]
 -- #endregion [Tables]
 -- ############################################################
 
@@ -289,6 +329,39 @@ BEGIN
 END;
 $$;
 -- #endregion [trigger_handler_project_staff_financial_fees_full]
+-- #region [trigger_handler_project_client_financial_fees_full]
+CREATE OR REPLACE FUNCTION public.trigger_handler_project_client_financial_fees_full()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_fees_id UUID := COALESCE(NEW.project_client_financial_fees_id, OLD.project_client_financial_fees_id);
+    v_sum_fixed BIGINT;
+    v_sum_items BIGINT;
+BEGIN
+    -- Sum from fixed fees
+    SELECT COALESCE(SUM(amount),0)
+    INTO v_sum_fixed
+    FROM public.project_client_financial_fees_fixed
+    WHERE project_client_financial_fees_id = v_fees_id;
+
+    -- Sum from items
+    SELECT COALESCE(SUM(quantity * unit_price),0)
+    INTO v_sum_items
+    FROM public.project_client_financial_fees_items
+    WHERE project_client_financial_fees_id = v_fees_id;
+
+    -- Update main table
+    UPDATE public.project_client_financial_fees
+    SET amount = v_sum_fixed + v_sum_items
+    WHERE id = v_fees_id;
+
+    RETURN NULL;
+END;
+$$;
+-- #endregion [trigger_handler_project_client_financial_fees_full]
 -- #endregion [Functions]
 -- ############################################################
 
@@ -476,6 +549,69 @@ WITH
 -- DELETE Policy [admin]
 CREATE POLICY "project_staff_financial_fees_items_policy_delete" ON public.project_staff_financial_fees_items FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [project_staff_financial_fees_items]
+-- #region [project_client_financial_fees]
+DROP POLICY IF EXISTS "project_client_financial_fees_policy_select" ON public.project_client_financial_fees;
+DROP POLICY IF EXISTS "project_client_financial_fees_policy_update" ON public.project_client_financial_fees;
+DROP POLICY IF EXISTS "project_client_financial_fees_policy_insert" ON public.project_client_financial_fees;
+DROP POLICY IF EXISTS "project_client_financial_fees_policy_delete" ON public.project_client_financial_fees;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_client_financial_fees_policy_select" ON public.project_client_financial_fees FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_client_financial_fees_policy_update" ON public.project_client_financial_fees FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_client_financial_fees_policy_insert" ON public.project_client_financial_fees FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_client_financial_fees_policy_delete" ON public.project_client_financial_fees FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_client_financial_fees]
+-- #region [project_client_financial_fees_fixed]
+DROP POLICY IF EXISTS "project_client_financial_fees_fixed_policy_select" ON public.project_client_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_client_financial_fees_fixed_policy_update" ON public.project_client_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_client_financial_fees_fixed_policy_insert" ON public.project_client_financial_fees_fixed;
+DROP POLICY IF EXISTS "project_client_financial_fees_fixed_policy_delete" ON public.project_client_financial_fees_fixed;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_client_financial_fees_fixed_policy_select" ON public.project_client_financial_fees_fixed FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_client_financial_fees_fixed_policy_update" ON public.project_client_financial_fees_fixed FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_client_financial_fees_fixed_policy_insert" ON public.project_client_financial_fees_fixed FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_client_financial_fees_fixed_policy_delete" ON public.project_client_financial_fees_fixed FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_client_financial_fees_fixed]
+-- #region [project_client_financial_fees_items]
+DROP POLICY IF EXISTS "project_client_financial_fees_items_policy_select" ON public.project_client_financial_fees_items;
+DROP POLICY IF EXISTS "project_client_financial_fees_items_policy_update" ON public.project_client_financial_fees_items;
+DROP POLICY IF EXISTS "project_client_financial_fees_items_policy_insert" ON public.project_client_financial_fees_items;
+DROP POLICY IF EXISTS "project_client_financial_fees_items_policy_delete" ON public.project_client_financial_fees_items;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_client_financial_fees_items_policy_select" ON public.project_client_financial_fees_items FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_client_financial_fees_items_policy_update" ON public.project_client_financial_fees_items FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_client_financial_fees_items_policy_insert" ON public.project_client_financial_fees_items FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_client_financial_fees_items_policy_delete" ON public.project_client_financial_fees_items FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_client_financial_fees_items]
 -- #endregion [Policies]
 -- ############################################################
 
@@ -511,6 +647,26 @@ ON public.project_staff_financial_fees_items
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_handler_project_staff_financial_fees_full();
 -- #endregion [trigger_project_staff_financial_fees_items_full]
+-- #region [trigger_project_client_financial_fees_fixed_full]
+DROP TRIGGER IF EXISTS trigger_project_client_financial_fees_fixed_full
+ON public.project_client_financial_fees_fixed;
+
+CREATE TRIGGER trigger_project_client_financial_fees_fixed_full
+AFTER INSERT OR UPDATE OR DELETE
+ON public.project_client_financial_fees_fixed
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_handler_project_client_financial_fees_full();
+-- #endregion [trigger_project_client_financial_fees_fixed_full]
+-- #region [trigger_project_client_financial_fees_items_full]
+DROP TRIGGER IF EXISTS trigger_project_client_financial_fees_items_full
+ON public.project_client_financial_fees_items;
+
+CREATE TRIGGER trigger_project_client_financial_fees_items_full
+AFTER INSERT OR UPDATE OR DELETE
+ON public.project_client_financial_fees_items
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_handler_project_client_financial_fees_full();
+-- #endregion [trigger_project_client_financial_fees_items_full]
 -- #endregion [Triggers]
 -- ############################################################
 
