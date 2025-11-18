@@ -252,7 +252,7 @@ BEGIN
         END IF;
     END IF;
 
-    RETURN NULL;
+    RETURN NEW;
 END;
 $$;
 -- #endregion [trigger_handler_partner_capital_transactions_full]
@@ -583,5 +583,31 @@ WHERE email IN (
         'ahmed.ismail@concraft.com'
     );
 -- #endregion [partners]
+-- #region [partner_capital_transactions]
+TRUNCATE TABLE public.partner_capital_transactions RESTART IDENTITY CASCADE;
+INSERT INTO public.partner_capital_transactions (partner_id, transaction_type, amount, transaction_date, notes)
+VALUES
+    --احمد ثامر 
+    ('72d903ae-6e99-4c8b-af4a-67e38b5cefea', 'deposit', 10000000, '2025-09-28', 'احتاجينه فلوس لفقار التميمي لجامعة الكوفة'),
+    --احمد اسماعيل 
+    ('21b53991-6bfd-49b8-b56e-da7b808e146b', 'deposit', 5500000, '2025-10-21', 'قام باعطائي مبلغ الأرباح الموزع بعد إضافة 15 الف على المبلغ'),
+    ('21b53991-6bfd-49b8-b56e-da7b808e146b', 'deposit', 4500000, '2025-10-22', 'اكمال المبلغ ليصبح المجموع 10 مليون');
+-- #endregion [partner_capital_transactions]
+-- #region [clients]
+TRUNCATE TABLE public.clients RESTART IDENTITY CASCADE;
+INSERT INTO public.clients (name)
+VALUES
+    ('ابو حوراء'),
+    ('الشكرجي'),
+    ('ابو نصير'),
+    ('مالك ابو كرار'),
+    ('شركة قصور المستقبل'),
+    ('فقار التميمي'),
+    ('مهندس امجد'),
+    ('شركة الغدير للاستثمارات العقارية'),
+    ('محمد عزيز'),
+    ('مهندس مسلم');
+-- #endregion [clients]
+
 -- #endregion [Data]
 -- ############################################################
