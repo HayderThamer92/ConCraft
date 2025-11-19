@@ -65,7 +65,7 @@ CREATE TABLE
         amount BIGINT NOT NULL,
         transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
         notes TEXT,
-        CONSTRAINT cash_amount_check CHECK (amount > 0)
+        CONSTRAINT partner_capital_transactions_amount_check CHECK (amount > 0)
     );
 ALTER TABLE public.partner_capital_transactions ENABLE ROW LEVEL SECURITY;
 CREATE INDEX partner_capital_transactions_partner_id_idx ON public.partner_capital_transactions (partner_id);
@@ -180,6 +180,34 @@ CREATE TABLE public.project_client_financial_fees_items (
 ALTER TABLE public.project_client_financial_fees_items ENABLE ROW LEVEL SECURITY;
 CREATE INDEX pcffi_project_client_financial_fees_id_idx ON public.project_client_financial_fees_items (project_client_financial_fees_id);
 -- #endregion [project_client_financial_fees_items]
+-- #region [project_staff_payments]
+DROP TABLE IF EXISTS public.project_staff_payments CASCADE;
+CREATE TABLE public.project_staff_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_id UUID NOT NULL REFERENCES public.projects (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  staff_id UUID NOT NULL REFERENCES public.staff (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  amount BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT project_staff_payments_project_id_staff_id_key UNIQUE (project_id, staff_id)
+);
+ALTER TABLE public.project_staff_payments ENABLE ROW LEVEL SECURITY;
+CREATE INDEX project_staff_payments_project_id_idx ON public.project_staff_payments (project_id);
+CREATE INDEX project_staff_payments_staff_id_idx ON public.project_staff_payments (staff_id);
+CREATE INDEX project_staff_payments_project_id_staff_id_idx ON public.project_staff_payments (project_id, staff_id);
+-- #endregion [project_staff_payments]
+-- #region [project_staff_payment_transactions]
+DROP TABLE IF EXISTS public.project_staff_payment_transactions CASCADE;
+CREATE TABLE public.project_staff_payment_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  project_staff_payments_id UUID NOT NULL REFERENCES public.project_staff_payments (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  amount BIGINT NOT NULL,
+  transaction_date DATE DEFAULT CURRENT_DATE,
+  place TEXT,
+  notes TEXT,
+  CONSTRAINT project_staff_payment_transactions_amount_check CHECK (amount > 0)
+);
+ALTER TABLE public.project_staff_payment_transactions ENABLE ROW LEVEL SECURITY;
+CREATE INDEX project_staff_payment_transactions_project_staff_payments_id_idx ON public.project_staff_payment_transactions (project_staff_payments_id);
+-- #endregion [project_staff_payment_transactions]
 -- #endregion [Tables]
 -- ############################################################
 
@@ -612,6 +640,48 @@ WITH
 -- DELETE Policy [admin]
 CREATE POLICY "project_client_financial_fees_items_policy_delete" ON public.project_client_financial_fees_items FOR DELETE USING (get_current_user_role () = 'admin');
 -- #endregion [project_client_financial_fees_items]
+-- #region [project_staff_payments]
+DROP POLICY IF EXISTS "project_staff_payments_policy_select" ON public.project_staff_payments;
+DROP POLICY IF EXISTS "project_staff_payments_policy_update" ON public.project_staff_payments;
+DROP POLICY IF EXISTS "project_staff_payments_policy_insert" ON public.project_staff_payments;
+DROP POLICY IF EXISTS "project_staff_payments_policy_delete" ON public.project_staff_payments;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_staff_payments_policy_select" ON public.project_staff_payments FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_staff_payments_policy_update" ON public.project_staff_payments FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_staff_payments_policy_insert" ON public.project_staff_payments FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_staff_payments_policy_delete" ON public.project_staff_payments FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_staff_payments]
+-- #region [project_staff_payment_transactions]
+DROP POLICY IF EXISTS "project_staff_payment_transactions_policy_select" ON public.project_staff_payment_transactions;
+DROP POLICY IF EXISTS "project_staff_payment_transactions_policy_update" ON public.project_staff_payment_transactions;
+DROP POLICY IF EXISTS "project_staff_payment_transactions_policy_insert" ON public.project_staff_payment_transactions;
+DROP POLICY IF EXISTS "project_staff_payment_transactions_policy_delete" ON public.project_staff_payment_transactions;
+-- SELECT Policy [admin,user]
+CREATE POLICY "project_staff_payment_transactions_policy_select" ON public.project_staff_payment_transactions FOR
+SELECT
+    USING (get_current_user_role () IN ('admin', 'user'));
+-- UPDATE Policy [admin]
+CREATE POLICY "project_staff_payment_transactions_policy_update" ON public.project_staff_payment_transactions FOR
+UPDATE USING (get_current_user_role () = 'admin')
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- INSERT Policy [admin]
+CREATE POLICY "project_staff_payment_transactions_policy_insert" ON public.project_staff_payment_transactions FOR INSERT
+WITH
+    CHECK (get_current_user_role () = 'admin');
+-- DELETE Policy [admin]
+CREATE POLICY "project_staff_payment_transactions_policy_delete" ON public.project_staff_payment_transactions FOR DELETE USING (get_current_user_role () = 'admin');
+-- #endregion [project_staff_payment_transactions]
 -- #endregion [Policies]
 -- ############################################################
 
