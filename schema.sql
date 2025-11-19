@@ -390,6 +390,45 @@ BEGIN
 END;
 $$;
 -- #endregion [trigger_handler_project_client_financial_fees_full]
+-- #region [trigger_handler_project_staff_payment_transactions_full]
+CREATE OR REPLACE FUNCTION public.trigger_handler_project_staff_payment_transactions_full()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_payment_id UUID := COALESCE(NEW.project_staff_payments_id, OLD.project_staff_payments_id);
+    v_total BIGINT;
+    v_cash_diff BIGINT;
+BEGIN
+    -- تحديث مجموع المبالغ في project_staff_payments
+    SELECT COALESCE(SUM(amount),0)
+    INTO v_total
+    FROM public.project_staff_payment_transactions
+    WHERE project_staff_payments_id = v_payment_id;
+
+    UPDATE public.project_staff_payments
+    SET amount = v_total
+    WHERE id = v_payment_id;
+
+    -- تحديث الكاش
+    IF TG_OP = 'INSERT' THEN
+        UPDATE public.cash
+        SET amount = amount - NEW.amount;
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_cash_diff := NEW.amount - OLD.amount;
+        UPDATE public.cash
+        SET amount = amount - v_cash_diff;
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE public.cash
+        SET amount = amount + OLD.amount;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+-- #endregion [trigger_handler_project_staff_payment_transactions_full]
 -- #endregion [Functions]
 -- ############################################################
 
@@ -737,6 +776,16 @@ ON public.project_client_financial_fees_items
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_handler_project_client_financial_fees_full();
 -- #endregion [trigger_project_client_financial_fees_items_full]
+-- #region [trigger_project_staff_payment_transactions_full]
+DROP TRIGGER IF EXISTS trigger_project_staff_payment_transactions_full
+ON public.project_staff_payment_transactions;
+
+CREATE TRIGGER trigger_project_staff_payment_transactions_full
+AFTER INSERT OR UPDATE OR DELETE
+ON public.project_staff_payment_transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_handler_project_staff_payment_transactions_full();
+-- #endregion [trigger_project_staff_payment_transactions_full]
 -- #endregion [Triggers]
 -- ############################################################
 
